@@ -11,6 +11,14 @@ cat > "$TMPFILE" 2>/dev/null || true
 
 EVENT_TYPE="${1:-session}"
 
+# Debug: log stdin to file for inspection
+DEBUG_LOG="$HOME/.fyso/hook-debug.log"
+if [ -f "$HOME/.fyso/debug" ]; then
+  echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) === EVENT=$EVENT_TYPE ===" >> "$DEBUG_LOG"
+  cat "$TMPFILE" >> "$DEBUG_LOG" 2>/dev/null
+  echo "" >> "$DEBUG_LOG"
+fi
+
 # Single python call: read config + parse stdin + build payload + send
 export TMPFILE EVENT_TYPE
 python3 << 'PYEOF'
@@ -78,37 +86,18 @@ if isinstance(tool_input, dict):
     if isinstance(detail, str) and len(detail) > 200:
         detail = detail[:200] + "..."
 
-# Tokens: search everywhere in tool_response
+# Tokens: extract from tool_response
 tokens = 0
-response_text = ""
-if isinstance(tool_response, str):
-    response_text = tool_response
-elif isinstance(tool_response, dict):
-    # Check nested usage
-    usage = tool_response.get("usage", {})
-    if isinstance(usage, dict):
-        tokens = usage.get("total_tokens", 0) or 0
-    # Flatten all string values to search
-    for v in tool_response.values():
-        if isinstance(v, str):
-            response_text += v + " "
-        elif isinstance(v, dict):
-            for vv in v.values():
-                if isinstance(vv, (str, int)):
-                    response_text += str(vv) + " "
-
-# Regex search for total_tokens in any text
-if response_text:
-    for pattern in [
-        r"total_tokens[\":\s]+(\d+)",
-        r"<total_tokens>(\d+)",
-        r"total_tokens:\s*(\d+)",
-    ]:
-        m = re.search(pattern, response_text)
-        if m:
-            found = int(m.group(1))
-            if found > tokens:
-                tokens = found
+if isinstance(tool_response, dict):
+    # Direct field (camelCase from Claude Code)
+    tokens = tool_response.get("totalTokens", 0) or 0
+    # Fallback: nested usage
+    if not tokens:
+        usage = tool_response.get("usage", {})
+        if isinstance(usage, dict):
+            tokens = usage.get("total_tokens", 0) or usage.get("totalTokens", 0) or 0
+            if not tokens:
+                tokens = (usage.get("input_tokens", 0) or 0) + (usage.get("output_tokens", 0) or 0) + (usage.get("cache_read_input_tokens", 0) or 0) + (usage.get("cache_creation_input_tokens", 0) or 0)
 
 # User
 user = user_email or getpass.getuser()
