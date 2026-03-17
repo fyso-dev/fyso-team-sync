@@ -1,6 +1,6 @@
 {
   "name": "fyso-team-sync",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Sync Fyso agent teams to local .claude/agents/",
   "claude_plugin": {
     "version": 2,

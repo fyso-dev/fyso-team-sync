@@ -155,7 +155,14 @@ data = {
 data = {k: v for k, v in data.items() if v is not None}
 payload = json.dumps(data).encode()
 
-# Send async (fire and forget)
+# Debug: log payload
+debug_path = os.path.expanduser("~/.fyso/debug")
+if os.path.exists(debug_path):
+    log_path = os.path.expanduser("~/.fyso/hook-debug.log")
+    with open(log_path, "a") as dl:
+        dl.write(f"PAYLOAD: {payload.decode()}\n")
+
+# Send
 try:
     req = urllib.request.Request(
         f"{api_url}/api/entities/tracking/records",
@@ -167,9 +174,16 @@ try:
         },
         method="POST",
     )
-    urllib.request.urlopen(req, timeout=5)
-except:
-    pass
+    resp = urllib.request.urlopen(req, timeout=5)
+    resp_body = resp.read().decode()
+    if os.path.exists(debug_path):
+        with open(log_path, "a") as dl:
+            dl.write(f"RESPONSE: {resp.status} {resp_body[:200]}\n\n")
+except Exception as e:
+    if os.path.exists(debug_path):
+        log_path = os.path.expanduser("~/.fyso/hook-debug.log")
+        with open(log_path, "a") as dl:
+            dl.write(f"ERROR: {e}\n\n")
 PYEOF
 
 # Cleanup
