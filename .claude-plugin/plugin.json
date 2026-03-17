@@ -1,0 +1,5 @@
+{
+  "name": "fyso-team-sync",
+  "version": "1.0.0",
+  "description": "Sync Fyso agent teams to local .claude/agents/ directory, making them available as Claude Code subagents."
+}
