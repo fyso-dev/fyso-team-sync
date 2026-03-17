@@ -1,11 +1,14 @@
 {
-  "marketplaceVersion": "1.0.0",
+  "name": "fyso-team-sync",
+  "owner": {
+    "name": "Fyso"
+  },
   "plugins": [
     {
       "name": "fyso-team-sync",
       "version": "1.0.0",
       "description": "Sync Fyso agent teams to local .claude/agents/ directory",
-      "path": "./"
+      "source": "./"
     }
   ]
 }
