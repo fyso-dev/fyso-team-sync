@@ -24,7 +24,15 @@ The API URL is always `https://api.fyso.dev`. Do NOT ask the user for it.
 
 ## Step 2 — Save credentials
 
-After obtaining the token (whether new or from saved config), save it to `~/.fyso/config.json`:
+After obtaining the token (whether new or from saved config), validate it by fetching the current user:
+
+```
+curl -s "https://api.fyso.dev/api/auth/me" \
+  -H "Authorization: Bearer {TOKEN}" \
+  -H "X-Tenant-ID: fyso-world-fcecd"
+```
+
+This returns the user's email and name. Save everything to `~/.fyso/config.json`:
 
 ```bash
 mkdir -p ~/.fyso
@@ -37,6 +45,8 @@ Write the file with the Write tool:
   "token": "{TOKEN}",
   "tenant_id": "fyso-world-fcecd",
   "api_url": "https://api.fyso.dev",
+  "user_email": "{EMAIL_FROM_API}",
+  "user_name": "{NAME_FROM_API}",
   "saved_at": "{ISO_TIMESTAMP}"
 }
 ```
