@@ -8,29 +8,28 @@ user-invocable: true
 
 Follow these steps exactly to sync a Fyso team's agents into the local `.claude/agents/` directory.
 
-## Step 1 — Collect token and tenant
+## Step 1 — Get the token
 
-Ask the user for the following. If they have provided any of these previously in this conversation, reuse them.
+Ask the user for their **Token** (Bearer token for API access). If they have provided it previously in this conversation, reuse it.
 
-- **Token** (Bearer token for API access)
-- **Tenant ID** (the tenant slug, e.g. `my-company-abc12`)
+Tell the user:
 
-Explain to the user:
+> Para obtener tu token, andá a https://agent-ui-sites.fyso.dev/ , ingresá con tu email y contraseña, y copiá el token que aparece en pantalla.
 
-> Para obtener tu token, abrí la URL que te compartió tu admin, ingresá con tu email y contraseña, y copiá el token que aparece en pantalla.
+The tenant ID is always `fyso-world-fcecd`. Do NOT ask the user for it.
 
-The API URL defaults to `https://api.fyso.dev`. Only ask the user for a custom API URL if they mention they need to use a different one.
+The API URL is always `https://api.fyso.dev`. Do NOT ask the user for it.
 
 Do NOT store credentials to disk. Keep them only in conversation memory for the duration of this session.
 
 ## Step 2 — List teams
 
-Fetch all teams using the token directly (no login step needed):
+Fetch all teams:
 
 ```
 curl -s "https://api.fyso.dev/api/entities/teams/records" \
   -H "Authorization: Bearer {TOKEN}" \
-  -H "X-Tenant-ID: {TENANT_ID}"
+  -H "X-Tenant-ID: fyso-world-fcecd"
 ```
 
 Parse the JSON response. The records are typically in a `data` array (or at the top level if the response is an array). Each team has at least `id` and `name`.
@@ -46,7 +45,7 @@ Using the selected team's `id`, fetch the agents assigned to that team:
 ```
 curl -s "https://api.fyso.dev/api/entities/team_agents/records?resolve=true&filter.team={TEAM_ID}" \
   -H "Authorization: Bearer {TOKEN}" \
-  -H "X-Tenant-ID: {TENANT_ID}"
+  -H "X-Tenant-ID: fyso-world-fcecd"
 ```
 
 The response contains records where each entry has an `agent` field (resolved to a full agent object because of `resolve=true`). Extract the agent details from each record. Key fields on each agent:
