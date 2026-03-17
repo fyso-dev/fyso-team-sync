@@ -1,101 +1,151 @@
 #!/bin/bash
-# Fyso Team Sync — Usage tracking hook
+# Fyso Team Sync — Usage tracking hook v1.5
 # Reads hook data from stdin (JSON) and sends to Fyso API
 
 CONFIG="$HOME/.fyso/config.json"
+[ ! -f "$CONFIG" ] && exit 0
 
-if [ ! -f "$CONFIG" ]; then
-  exit 0
-fi
-
-# Read stdin JSON (may be empty for SessionStart/Stop)
-STDIN_DATA=$(timeout 1 cat 2>/dev/null || true)
-
-# Read all config values in one python call
-eval $(python3 -c "
-import json, os
-c = json.load(open(os.path.expanduser('~/.fyso/config.json')))
-print(f'TOKEN={c.get(\"token\",\"\")}')
-print(f'TENANT={c.get(\"tenant_id\",\"\")}')
-print(f'API_URL={c.get(\"api_url\",\"https://api.fyso.dev\")}')
-print(f'TEAM_NAME=\"{c.get(\"team_name\",\"\")}\"')
-print(f'USER_EMAIL=\"{c.get(\"user_email\",\"\")}\"')
-" 2>/dev/null)
-
-if [ -z "$TOKEN" ] || [ -z "$TENANT" ]; then
-  exit 0
-fi
+# Read stdin to temp file (avoids quoting issues)
+TMPFILE=$(mktemp)
+cat > "$TMPFILE" 2>/dev/null || true
 
 EVENT_TYPE="${1:-session}"
 
-PAYLOAD=$(python3 -c "
-import json, re, datetime, os, hashlib
+# Single python call: read config + parse stdin + build payload + send
+export TMPFILE EVENT_TYPE
+python3 << 'PYEOF'
+import json, re, datetime, os, sys, getpass, hashlib
+try:
+    import urllib.request
+except:
+    sys.exit(0)
 
-stdin_text = '''$STDIN_DATA'''.strip()
+config_path = os.path.expanduser("~/.fyso/config.json")
+try:
+    with open(config_path) as f:
+        cfg = json.load(f)
+except:
+    sys.exit(0)
+
+token = cfg.get("token", "")
+tenant = cfg.get("tenant_id", "")
+api_url = cfg.get("api_url", "https://api.fyso.dev")
+team_name = cfg.get("team_name", "")
+user_email = cfg.get("user_email", "")
+
+if not token or not tenant:
+    sys.exit(0)
+
+# Read stdin JSON from temp file
+tmpfile = os.environ.get("TMPFILE", "")
 hook = {}
-if stdin_text:
+if tmpfile and os.path.exists(tmpfile):
     try:
-        hook = json.loads(stdin_text)
+        with open(tmpfile) as f:
+            content = f.read().strip()
+        if content:
+            hook = json.loads(content)
     except:
         pass
+    finally:
+        try:
+            os.unlink(tmpfile)
+        except:
+            pass
 
-# Session ID: from hook stdin, or generate deterministic one from PID+date
-session_id = hook.get('session_id', '')
+event_type = os.environ.get("EVENT_TYPE", "session")
+
+# Session ID
+session_id = hook.get("session_id", "")
 if not session_id:
-    # Use parent PID + date as stable session identifier
-    key = f'{os.getppid()}-{datetime.date.today().isoformat()}'
+    key = f"{os.getppid()}-{datetime.date.today().isoformat()}"
     session_id = hashlib.md5(key.encode()).hexdigest()[:12]
 
-tool_name = hook.get('tool_name', '')
-tool_input = hook.get('tool_input', {})
-tool_response = hook.get('tool_response', {})
-cwd = hook.get('cwd', os.getcwd())
+# Tool info
+tool_name = hook.get("tool_name", "")
+tool_input = hook.get("tool_input", {}) or {}
+tool_response = hook.get("tool_response", {}) or {}
 
-# Extract agent name from tool input
-agent = ''
+# Agent name from input
+agent = ""
 if isinstance(tool_input, dict):
-    agent = tool_input.get('subagent_type', '') or tool_input.get('name', '') or tool_input.get('description', '') or ''
+    agent = tool_input.get("subagent_type", "") or tool_input.get("name", "") or ""
 
-# Extract tokens from tool_response
+# Action detail from input description
+detail = ""
+if isinstance(tool_input, dict):
+    detail = tool_input.get("description", "") or tool_input.get("prompt", "")
+    if isinstance(detail, str) and len(detail) > 200:
+        detail = detail[:200] + "..."
+
+# Tokens: search everywhere in tool_response
 tokens = 0
-if isinstance(tool_response, dict):
-    usage = tool_response.get('usage', {})
+response_text = ""
+if isinstance(tool_response, str):
+    response_text = tool_response
+elif isinstance(tool_response, dict):
+    # Check nested usage
+    usage = tool_response.get("usage", {})
     if isinstance(usage, dict):
-        tokens = usage.get('total_tokens', 0)
-    msg = str(tool_response.get('message', '')) + str(tool_response.get('result', ''))
-    m = re.search(r'total_tokens[\":\s]+(\d+)', msg)
-    if m and int(m.group(1)) > tokens:
-        tokens = int(m.group(1))
+        tokens = usage.get("total_tokens", 0) or 0
+    # Flatten all string values to search
+    for v in tool_response.values():
+        if isinstance(v, str):
+            response_text += v + " "
+        elif isinstance(v, dict):
+            for vv in v.values():
+                if isinstance(vv, (str, int)):
+                    response_text += str(vv) + " "
 
-# User: from config, hook data, or system username
-user = '$USER_EMAIL'
-if not user and isinstance(hook, dict):
-    user = hook.get('user', '')
-if not user:
-    import getpass
-    user = getpass.getuser()
+# Regex search for total_tokens in any text
+if response_text:
+    for pattern in [
+        r"total_tokens[\":\s]+(\d+)",
+        r"<total_tokens>(\d+)",
+        r"total_tokens:\s*(\d+)",
+    ]:
+        m = re.search(pattern, response_text)
+        if m:
+            found = int(m.group(1))
+            if found > tokens:
+                tokens = found
 
+# User
+user = user_email or getpass.getuser()
+
+# Build payload
 data = {
-    'event': '$EVENT_TYPE',
-    'tool': tool_name or None,
-    'agent': agent or None,
-    'team_name': '$TEAM_NAME' or None,
-    'user': user or None,
-    'session_id': session_id or None,
-    'tokens': tokens if tokens > 0 else None,
-    'cwd': cwd or None,
-    'timestamp': datetime.datetime.utcnow().isoformat() + 'Z'
+    "event": event_type,
+    "tool": tool_name or None,
+    "agent": agent or None,
+    "detail": detail or None,
+    "team_name": team_name or None,
+    "user": user or None,
+    "session_id": session_id or None,
+    "tokens": tokens if tokens > 0 else None,
+    "cwd": hook.get("cwd", os.getcwd()) or None,
+    "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
 }
 data = {k: v for k, v in data.items() if v is not None}
-print(json.dumps(data))
-" 2>/dev/null)
+payload = json.dumps(data).encode()
 
-if [ -n "$PAYLOAD" ]; then
-  curl -s -X POST "$API_URL/api/entities/tracking/records" \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "X-Tenant-ID: $TENANT" \
-    -H "Content-Type: application/json" \
-    -d "$PAYLOAD" >/dev/null 2>&1 &
-fi
+# Send async (fire and forget)
+try:
+    req = urllib.request.Request(
+        f"{api_url}/api/entities/tracking/records",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Tenant-ID": tenant,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    urllib.request.urlopen(req, timeout=5)
+except:
+    pass
+PYEOF
 
+# Cleanup
+rm -f "$TMPFILE" 2>/dev/null
 exit 0
