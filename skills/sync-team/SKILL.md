@@ -115,7 +115,17 @@ The response contains records where each entry has an `_agent` field (resolved t
 
 If any field is missing, use a sensible default (empty string for text fields, "assistant" for role).
 
-## Step 7 — Create agent files
+## Step 7 — Clean existing agent files
+
+Before creating new files, remove any existing agent files that will be overwritten. For each agent from the API response, check if `.claude/agents/{name}.md` already exists and delete it:
+
+```bash
+rm -f .claude/agents/{name}.md
+```
+
+This ensures a clean sync without stale data from previous runs.
+
+## Step 8 — Create agent files
 
 First, ensure the `.claude/agents/` directory exists in the current working directory:
 
@@ -163,7 +173,7 @@ The match should be case-insensitive and partial (e.g. "Senior Developer" matche
 
 For `first_line_of_soul`: take the first non-empty line of the `soul` field, trimmed. If soul is empty, use the display_name instead.
 
-## Step 8 — Report results
+## Step 9 — Report results
 
 After creating all files, print a summary:
 
