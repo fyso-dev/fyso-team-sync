@@ -8,31 +8,30 @@ user-invocable: true
 
 Follow these steps exactly to sync a Fyso team's agents into the local `.claude/agents/` directory and the team prompt into `.claude/CLAUDE.md`.
 
+## Config structure
+
+This plugin uses two config files:
+
+- `~/.fyso/config.json` — **global** (user credentials, shared across all projects)
+- `.fyso/team.json` — **local** (team info, per project directory)
+
 ## Step 1 — Get the API key
 
 First, check if a saved key exists at `~/.fyso/config.json`. If it does, read it and use the stored `token` and `tenant_id` values. Tell the user you found saved credentials and ask if they want to use them or enter new ones.
 
-If no saved config exists, ask the user for their **API Key** (`fyso_pk_...`).
+If no saved config exists, ask the user for their **Token** (Bearer token for API access).
 
 Tell the user:
 
-> Para obtener tu API Key, andá a https://agent-ui-sites.fyso.dev/ , ingresá con tu email y contraseña, y hacé click en "Generar API Key". La key dura 360 dias y solo se muestra una vez.
+> Para obtener tu token, andá a https://agent-ui-sites.fyso.dev/ , ingresá con tu email y contraseña, y copiá el token que aparece en pantalla.
 
 The tenant ID is always `fyso-world-fcecd`. Do NOT ask the user for it.
 
 The API URL is always `https://api.fyso.dev`. Do NOT ask the user for it.
 
-## Step 2 — Save credentials
+## Step 2 — Save global credentials
 
-After obtaining the token (whether new or from saved config), validate it by fetching the current user:
-
-```
-curl -s "https://api.fyso.dev/api/auth/me" \
-  -H "Authorization: Bearer {TOKEN}" \
-  -H "X-Tenant-ID: fyso-world-fcecd"
-```
-
-This returns the user's email and name. Save everything to `~/.fyso/config.json`:
+Save to `~/.fyso/config.json` (global, user-level):
 
 ```bash
 mkdir -p ~/.fyso
@@ -45,13 +44,12 @@ Write the file with the Write tool:
   "token": "{TOKEN}",
   "tenant_id": "fyso-world-fcecd",
   "api_url": "https://api.fyso.dev",
-  "user_email": "{EMAIL_FROM_API}",
-  "user_name": "{NAME_FROM_API}",
+  "user_email": "{EMAIL_IF_KNOWN}",
   "saved_at": "{ISO_TIMESTAMP}"
 }
 ```
 
-This ensures future runs of `/sync-team` can reuse the token without asking again.
+If you can validate the token by calling `GET /api/auth/me`, do it and save the `user_email`. If the endpoint returns an error, skip it and save without email.
 
 ## Step 3 — List teams
 
@@ -69,7 +67,19 @@ Parse the JSON response. The records are in `data.items`. Each team has at least
 
 Present the list of teams to the user in a numbered list, showing each team's name. Ask them to pick one by number or name. Wait for their response before continuing.
 
-Save the selected team info to `~/.fyso/config.json` (update the existing file adding `team_id` and `team_name` fields).
+Save the selected team info to `.fyso/team.json` in the **current working directory** (local, per project):
+
+```bash
+mkdir -p .fyso
+```
+
+```json
+{
+  "team_id": "{TEAM_ID}",
+  "team_name": "{TEAM_NAME}",
+  "synced_at": "{ISO_TIMESTAMP}"
+}
+```
 
 ## Step 5 — Write team prompt to CLAUDE.md
 
@@ -160,7 +170,8 @@ After creating all files, print a summary:
 - Whether the team prompt was written to `.claude/CLAUDE.md`
 - How many agent files were created
 - The full path of each file created
-- That credentials were saved to `~/.fyso/config.json` for future use
+- That global credentials were saved to `~/.fyso/config.json`
+- That team info was saved to `.fyso/team.json`
 - A reminder that the user can now use these agents as subagents in Claude Code via the Task tool or by referencing them
 
 If no agents were found for the selected team, inform the user and suggest they check the team configuration in the Fyso dashboard at https://agent-ui-sites.fyso.dev.

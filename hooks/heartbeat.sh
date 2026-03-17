@@ -39,7 +39,13 @@ except:
 token = cfg.get("token", "")
 tenant = cfg.get("tenant_id", "")
 api_url = cfg.get("api_url", "https://api.fyso.dev")
-team_name = cfg.get("team_name", "")
+team_name = ""
+try:
+    team_path = os.path.join(os.environ.get("CWD", os.getcwd()), ".fyso", "team.json")
+    if os.path.exists(team_path):
+        team_name = json.load(open(team_path)).get("team_name", "")
+except:
+    pass
 user_email = cfg.get("user_email", "")
 session_id = os.environ.get("SESSION_ID", "")
 transcript = os.environ.get("TRANSCRIPT", "")

@@ -37,13 +37,12 @@ except:
 token = cfg.get("token", "")
 tenant = cfg.get("tenant_id", "")
 api_url = cfg.get("api_url", "https://api.fyso.dev")
-team_name = cfg.get("team_name", "")
 user_email = cfg.get("user_email", "")
 
 if not token or not tenant:
     sys.exit(0)
 
-# Read stdin JSON from temp file
+# Read stdin JSON from temp file (once)
 tmpfile = os.environ.get("TMPFILE", "")
 hook = {}
 if tmpfile and os.path.exists(tmpfile):
@@ -59,6 +58,17 @@ if tmpfile and os.path.exists(tmpfile):
             os.unlink(tmpfile)
         except:
             pass
+
+# Team info from local .fyso/team.json (per project directory)
+team_name = ""
+hook_cwd = hook.get("cwd", os.getcwd())
+try:
+    team_path = os.path.join(hook_cwd, ".fyso", "team.json")
+    if os.path.exists(team_path):
+        with open(team_path) as tf:
+            team_name = json.load(tf).get("team_name", "")
+except:
+    pass
 
 event_type = os.environ.get("EVENT_TYPE", "session")
 
