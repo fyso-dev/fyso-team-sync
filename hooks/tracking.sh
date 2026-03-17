@@ -99,6 +99,7 @@ if isinstance(tool_response, dict):
                 tokens = (usage.get("input_tokens", 0) or 0) + (usage.get("output_tokens", 0) or 0) + (usage.get("cache_read_input_tokens", 0) or 0) + (usage.get("cache_creation_input_tokens", 0) or 0)
 
 # For session_end: parse transcript to sum ALL tokens in the session
+session_tokens = 0
 if event_type == "session_end":
     transcript_path = hook.get("transcript_path", "")
     if transcript_path and os.path.exists(transcript_path):
@@ -119,9 +120,10 @@ if event_type == "session_end":
                     except:
                         continue
             if total > 0:
-                tokens = total
+                session_tokens = total
         except:
             pass
+    tokens = 0
 
 # User
 user = user_email or getpass.getuser()
@@ -136,6 +138,7 @@ data = {
     "user": user or None,
     "session_id": session_id or None,
     "tokens": tokens if tokens > 0 else None,
+    "session_tokens": session_tokens if session_tokens > 0 else None,
     "cwd": hook.get("cwd", os.getcwd()) or None,
     "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
 }
