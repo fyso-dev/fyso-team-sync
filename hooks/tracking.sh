@@ -1,7 +1,6 @@
 #!/bin/bash
 # Fyso Team Sync — Usage tracking hook
-# Sends usage events to the Fyso API for team analytics
-# Reads credentials from ~/.fyso/config.json
+# Reads hook data from stdin (JSON) and sends to Fyso API
 
 CONFIG="$HOME/.fyso/config.json"
 
@@ -9,10 +8,13 @@ if [ ! -f "$CONFIG" ]; then
   exit 0
 fi
 
+# Read stdin JSON
+STDIN_DATA=$(cat)
+
+# Read config
 TOKEN=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('token',''))" 2>/dev/null)
 TENANT=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('tenant_id',''))" 2>/dev/null)
 API_URL=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('api_url','https://api.fyso.dev'))" 2>/dev/null)
-TEAM_ID=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('team_id',''))" 2>/dev/null)
 TEAM_NAME=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('team_name',''))" 2>/dev/null)
 USER_EMAIL=$(python3 -c "import json; print(json.load(open('$CONFIG')).get('user_email',''))" 2>/dev/null)
 
@@ -21,57 +23,63 @@ if [ -z "$TOKEN" ] || [ -z "$TENANT" ]; then
 fi
 
 EVENT_TYPE="${1:-session}"
-TOOL_NAME="${CLAUDE_TOOL_NAME:-unknown}"
-AGENT_NAME=""
-TOKENS_USED=0
-SESSION_ID="${CLAUDE_SESSION_ID:-$(python3 -c "import uuid; print(str(uuid.uuid4())[:8])" 2>/dev/null)}"
 
-if [ -n "$CLAUDE_TOOL_INPUT" ]; then
-  AGENT_NAME=$(echo "$CLAUDE_TOOL_INPUT" | python3 -c "
-import sys,json
-try:
-  d=json.load(sys.stdin)
-  print(d.get('subagent_type','') or d.get('name','') or '')
-except:
-  print('')
-" 2>/dev/null)
-fi
+PAYLOAD=$(echo "$STDIN_DATA" | python3 -c "
+import sys, json, re, datetime, os
 
-# Capture token usage from tool output if available
-if [ -n "$CLAUDE_TOOL_OUTPUT" ]; then
-  TOKENS_USED=$(echo "$CLAUDE_TOOL_OUTPUT" | python3 -c "
-import sys,json,re
-try:
-  text = sys.stdin.read()
-  m = re.search(r'total_tokens[\":\s]+(\d+)', text)
-  if m: print(m.group(1))
-  else: print(0)
-except:
-  print(0)
-" 2>/dev/null)
-fi
+stdin_text = sys.stdin.read().strip()
+hook = {}
+if stdin_text:
+    try:
+        hook = json.loads(stdin_text)
+    except:
+        pass
 
-PAYLOAD=$(python3 -c "
-import json, datetime, os
+session_id = hook.get('session_id', '')
+tool_name = hook.get('tool_name', 'unknown')
+tool_input = hook.get('tool_input', {})
+tool_response = hook.get('tool_response', {})
+cwd = hook.get('cwd', os.getcwd())
+
+# Extract agent name from tool input
+agent = ''
+if isinstance(tool_input, dict):
+    agent = tool_input.get('subagent_type', '') or tool_input.get('name', '') or tool_input.get('description', '') or ''
+
+# Extract tokens from tool_response
+tokens = 0
+if isinstance(tool_response, dict):
+    # Check for usage in response
+    usage = tool_response.get('usage', {})
+    if isinstance(usage, dict):
+        tokens = usage.get('total_tokens', 0)
+    # Check for tokens in message/result text
+    msg = str(tool_response.get('message', '')) + str(tool_response.get('result', ''))
+    m = re.search(r'total_tokens[\":\s]+(\d+)', msg)
+    if m and int(m.group(1)) > tokens:
+        tokens = int(m.group(1))
+
 data = {
-  'event': '$EVENT_TYPE',
-  'tool': '$TOOL_NAME',
-  'agent': '$AGENT_NAME',
-  'team_name': '$TEAM_NAME',
-  'user': '$USER_EMAIL',
-  'session_id': '$SESSION_ID',
-  'tokens': int('$TOKENS_USED') if '$TOKENS_USED'.isdigit() and int('$TOKENS_USED') > 0 else None,
-  'cwd': os.getcwd(),
-  'timestamp': datetime.datetime.utcnow().isoformat() + 'Z'
+    'event': '$EVENT_TYPE',
+    'tool': tool_name,
+    'agent': agent,
+    'team_name': '$TEAM_NAME',
+    'user': '$USER_EMAIL',
+    'session_id': session_id,
+    'tokens': tokens if tokens > 0 else None,
+    'cwd': cwd,
+    'timestamp': datetime.datetime.utcnow().isoformat() + 'Z'
 }
 data = {k: v for k, v in data.items() if v is not None and v != ''}
 print(json.dumps(data))
 " 2>/dev/null)
 
-curl -s -X POST "$API_URL/api/entities/tracking/records" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "X-Tenant-ID: $TENANT" \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD" >/dev/null 2>&1 &
+if [ -n "$PAYLOAD" ]; then
+  curl -s -X POST "$API_URL/api/entities/tracking/records" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "X-Tenant-ID: $TENANT" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD" >/dev/null 2>&1 &
+fi
 
 exit 0
