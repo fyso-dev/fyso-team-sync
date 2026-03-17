@@ -11,12 +11,11 @@ cat > "$TMPFILE" 2>/dev/null || true
 
 EVENT_TYPE="${1:-session}"
 
-# Debug: log stdin to file for inspection
-DEBUG_LOG="$HOME/.fyso/hook-debug.log"
+# Debug: save raw stdin for inspection
 if [ -f "$HOME/.fyso/debug" ]; then
-  echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) === EVENT=$EVENT_TYPE ===" >> "$DEBUG_LOG"
-  cat "$TMPFILE" >> "$DEBUG_LOG" 2>/dev/null
-  echo "" >> "$DEBUG_LOG"
+  echo "=== $(date -u) === EVENT=$EVENT_TYPE ===" >> "$HOME/.fyso/hook-debug.log"
+  cp "$TMPFILE" "$HOME/.fyso/last-hook-stdin.json" 2>/dev/null
+  echo "TMPFILE=$TMPFILE size=$(wc -c < "$TMPFILE")" >> "$HOME/.fyso/hook-debug.log"
 fi
 
 # Single python call: read config + parse stdin + build payload + send
@@ -85,19 +84,44 @@ if isinstance(tool_input, dict):
     detail = tool_input.get("description", "") or tool_input.get("prompt", "")
     if isinstance(detail, str) and len(detail) > 200:
         detail = detail[:200] + "..."
+if event_type in ("session_start", "session_end"):
+    detail = event_type.replace("_", " ")
 
-# Tokens: extract from tool_response
+# Tokens: extract from tool_response or transcript
 tokens = 0
 if isinstance(tool_response, dict):
-    # Direct field (camelCase from Claude Code)
     tokens = tool_response.get("totalTokens", 0) or 0
-    # Fallback: nested usage
     if not tokens:
         usage = tool_response.get("usage", {})
         if isinstance(usage, dict):
             tokens = usage.get("total_tokens", 0) or usage.get("totalTokens", 0) or 0
             if not tokens:
                 tokens = (usage.get("input_tokens", 0) or 0) + (usage.get("output_tokens", 0) or 0) + (usage.get("cache_read_input_tokens", 0) or 0) + (usage.get("cache_creation_input_tokens", 0) or 0)
+
+# For session_end: parse transcript to sum ALL tokens in the session
+if event_type == "session_end":
+    transcript_path = hook.get("transcript_path", "")
+    if transcript_path and os.path.exists(transcript_path):
+        try:
+            total = 0
+            with open(transcript_path) as tf:
+                for line in tf:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        msg = entry.get("message", {})
+                        if isinstance(msg, dict):
+                            u = msg.get("usage", {})
+                            if isinstance(u, dict):
+                                total += (u.get("input_tokens", 0) or 0) + (u.get("output_tokens", 0) or 0)
+                    except:
+                        continue
+            if total > 0:
+                tokens = total
+        except:
+            pass
 
 # User
 user = user_email or getpass.getuser()
