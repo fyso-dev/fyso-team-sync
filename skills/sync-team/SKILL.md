@@ -1,6 +1,7 @@
 ---
 name: sync-team
 description: Sync a Fyso agent team to local .claude/agents/ directory. Downloads agent definitions and creates .md files for Claude Code to use as subagents.
+user-invocable: true
 ---
 
 # Sync Fyso Team Agents
