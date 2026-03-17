@@ -8,15 +8,15 @@ user-invocable: true
 
 Follow these steps exactly to sync a Fyso team's agents into the local `.claude/agents/` directory and the team prompt into `.claude/CLAUDE.md`.
 
-## Step 1 — Get the token
+## Step 1 — Get the API key
 
-First, check if a saved token exists at `~/.fyso/config.json`. If it does, read it and use the stored `token` and `tenant_id` values. Tell the user you found saved credentials and ask if they want to use them or enter new ones.
+First, check if a saved key exists at `~/.fyso/config.json`. If it does, read it and use the stored `token` and `tenant_id` values. Tell the user you found saved credentials and ask if they want to use them or enter new ones.
 
-If no saved config exists, ask the user for their **Token** (Bearer token for API access).
+If no saved config exists, ask the user for their **API Key** (`fyso_pk_...`).
 
 Tell the user:
 
-> Para obtener tu token, andá a https://agent-ui-sites.fyso.dev/ , ingresá con tu email y contraseña, y copiá el token que aparece en pantalla.
+> Para obtener tu API Key, andá a https://agent-ui-sites.fyso.dev/ , ingresá con tu email y contraseña, y hacé click en "Generar API Key". La key dura 360 dias y solo se muestra una vez.
 
 The tenant ID is always `fyso-world-fcecd`. Do NOT ask the user for it.
 
