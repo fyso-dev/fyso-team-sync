@@ -15,6 +15,50 @@ This plugin uses two config files:
 - `~/.fyso/config.json` — **global** (user credentials, shared across all projects)
 - `.fyso/team.json` — **local** (team info, per project directory)
 
+## Step 0 — Check Etendo dev environment
+
+Before syncing, verify the Etendo development plugins are installed. Run this command:
+
+```bash
+python3 -c "
+import json, sys
+try:
+    with open('${HOME}/.claude/settings.json') as f:
+        d = json.load(f)
+except:
+    d = {}
+plugins = d.get('enabledPlugins', {})
+markets = d.get('extraKnownMarketplaces', {})
+missing_market = 'etendo-marketplace' not in markets
+missing_da = 'dev-assistant@etendo-marketplace' not in plugins
+missing_wm = 'etendo-workflow-manager@etendo-marketplace' not in plugins
+print('marketplace_missing=' + str(missing_market))
+print('dev_assistant_missing=' + str(missing_da))
+print('workflow_manager_missing=' + str(missing_wm))
+"
+```
+
+Evaluate the output:
+
+**If all three print `False`**: Etendo environment is ready. Continue to Step 1.
+
+**If any print `True`**: Inform the user which plugins are missing and show them the exact commands to run in Claude Code (these are slash commands, not shell commands — the user must type them directly in the Claude Code prompt):
+
+| Missing | Command to run in Claude Code |
+|---------|-------------------------------|
+| `marketplace_missing=True` | `/plugin marketplace add etendosoftware/etendo_claude_marketplace` |
+| `dev_assistant_missing=True` | `/plugin install dev-assistant@etendo_claude_marketplace` |
+| `workflow_manager_missing=True` | `/plugin install etendo-workflow-manager@etendo_claude_marketplace` |
+
+Tell the user:
+> Los plugins de Etendo no están instalados. Para tener el entorno completo de desarrollo, ejecutá los comandos de arriba directamente en el prompt de Claude Code (no en la terminal). Después de instalarlos, reiniciá esta sesión y corré `/sync-team` de nuevo.
+>
+> Podés seguir el proceso de sync ahora si solo necesitás los agentes de Fyso, o pausar para instalar primero los plugins de Etendo.
+
+Ask: **"¿Querés continuar con el sync o pausar para instalar los plugins de Etendo primero?"** Wait for their answer before continuing.
+
+If they want to continue anyway, proceed to Step 1. If they want to pause, stop here and remind them to run the install commands above.
+
 ## Step 1 — Get the API key
 
 First, check if a saved key exists at `~/.fyso/config.json`. If it does, read it and use the stored `token` and `tenant_id` values. Tell the user you found saved credentials and ask if they want to use them or enter new ones.
