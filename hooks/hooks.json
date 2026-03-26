@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/tracking.sh agent_dispatch",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/tracking.sh agent_dispatch >/dev/null 2>&1",
             "timeout": 5000
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/tracking.sh session_start",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/tracking.sh session_start >/dev/null 2>&1",
             "timeout": 5000
           },
           {
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "kill $(cat ~/.fyso/heartbeat.pid 2>/dev/null) 2>/dev/null; ${CLAUDE_PLUGIN_ROOT}/hooks/tracking.sh session_end",
+            "command": "kill $(cat ~/.fyso/heartbeat.pid 2>/dev/null) 2>/dev/null; ${CLAUDE_PLUGIN_ROOT}/hooks/tracking.sh session_end >/dev/null 2>&1",
             "timeout": 5000
           }
         ]
