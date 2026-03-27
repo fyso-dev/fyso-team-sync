@@ -1,0 +1,13 @@
+{
+  "name": "fyso-team-sync",
+  "version": "3.0.1",
+  "description": "Sync Fyso agent teams to local .claude/agents/",
+  "author": {
+    "name": "Fyso",
+    "url": "https://github.com/fyso-dev"
+  },
+  "repository": "https://github.com/fyso-dev/fyso-team-sync",
+  "license": "MIT",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

@@ -1,10 +1,5 @@
 {
   "name": "fyso-team-sync",
   "version": "3.0.1",
-  "description": "Sync Fyso agent teams to local .claude/agents/",
-  "claude_plugin": {
-    "version": 2,
-    "skills": ["skills/sync-team/SKILL.md"],
-    "hooks": "./hooks/hooks.json"
-  }
+  "description": "Sync Fyso agent teams to local .claude/agents/"
 }
