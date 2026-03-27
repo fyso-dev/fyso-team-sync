@@ -94,8 +94,50 @@ if isinstance(tool_input, dict):
     detail = tool_input.get("description", "") or tool_input.get("prompt", "")
     if isinstance(detail, str) and len(detail) > 200:
         detail = detail[:200] + "..."
-if event_type in ("session_start", "session_end"):
-    detail = event_type.replace("_", " ")
+if event_type == "session_start":
+    detail = "session start"
+elif event_type == "session_end":
+    # Extract a summary from the last assistant message in the transcript
+    transcript_path = hook.get("transcript_path", "")
+    summary = ""
+    if transcript_path and os.path.exists(transcript_path):
+        try:
+            last_text = ""
+            tools_used = []
+            with open(transcript_path) as tf:
+                for line in tf:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        msg = entry.get("message", {})
+                        if not isinstance(msg, dict):
+                            continue
+                        content = msg.get("content", [])
+                        if isinstance(content, list):
+                            for c in content:
+                                if isinstance(c, dict):
+                                    if c.get("type") == "tool_use":
+                                        name = c.get("name", "")
+                                        if name and name not in tools_used[-5:]:
+                                            tools_used.append(name)
+                                    if c.get("type") == "text" and msg.get("role") == "assistant":
+                                        t = c.get("text", "").strip()
+                                        if t and len(t) > 10:
+                                            last_text = t
+                    except:
+                        continue
+            # Build summary: last meaningful text + recent tools
+            if last_text:
+                # Take first line, truncate
+                first_line = last_text.split("\n")[0][:120]
+                summary = first_line
+            elif tools_used:
+                summary = "Used: " + ", ".join(tools_used[-5:])
+        except:
+            pass
+    detail = summary if summary else "session end"
 
 # Tokens: extract from tool_response or transcript
 tokens = 0
