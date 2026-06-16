@@ -6,6 +6,14 @@
 CONFIG="$HOME/.fyso/config.json"
 [ ! -f "$CONFIG" ] && exit 0
 
+# Warn if a previous SSL error was recorded
+if [ -f "$HOME/.fyso/ssl-error.log" ]; then
+  echo "[fyso] SSL certificate error detected. Tracking is disabled." >&2
+  echo "[fyso] Fix: open /Applications/Python\ 3.*/Install\ Certificates.command" >&2
+  echo "[fyso] Then delete ~/.fyso/ssl-error.log to re-enable tracking." >&2
+  exit 0
+fi
+
 # Read stdin to temp file (avoids quoting issues)
 TMPFILE=$(mktemp)
 cat > "$TMPFILE" 2>/dev/null || true
@@ -283,6 +291,20 @@ try:
         with open(log_path, "a") as dl:
             dl.write(f"RESPONSE: {resp.status} {resp_body[:200]}\n\n")
 except Exception as e:
+    err_str = str(e)
+    is_ssl = "CERTIFICATE_VERIFY_FAILED" in err_str or ("SSL" in err_str and "certificate" in err_str.lower())
+    if is_ssl:
+        ssl_log = os.path.expanduser("~/.fyso/ssl-error.log")
+        with open(ssl_log, "w") as sl:
+            sl.write(f"[{datetime.datetime.utcnow().isoformat()}Z] SSL error: {e}\n")
+            sl.write("Fyso tracking is disabled until the SSL issue is resolved.\n\n")
+            sl.write("Fix on macOS:\n")
+            sl.write("  open /Applications/Python\\ 3.*/Install\\ Certificates.command\n\n")
+            sl.write("Fix on any OS:\n")
+            sl.write("  pip install --upgrade certifi\n\n")
+            sl.write("After fixing, delete this file to re-enable tracking:\n")
+            sl.write("  rm ~/.fyso/ssl-error.log\n")
+    debug_path = os.path.expanduser("~/.fyso/debug")
     if os.path.exists(debug_path):
         log_path = os.path.expanduser("~/.fyso/hook-debug.log")
         with open(log_path, "a") as dl:
